@@ -16,7 +16,7 @@ Follow every step in exact order. Do not skip anything.
 | Phase 4 — GitHub Repository Setup | DONE |
 | Phase 5 — Create GitHub App | DONE |
 | Phase 6 — LangFuse Setup | DONE |
-| Phase 7 — OpenAI API Key | DONE |
+| Phase 7 — Groq API Key | DONE |
 | Phase 8 — Provision AWS Infrastructure | DONE |
 | Phase 9 — Configure GitHub Secrets | DONE |
 | Phase 10 — First Deployment via GitHub Actions | DONE |
@@ -40,7 +40,7 @@ Follow every step in exact order. Do not skip anything.
 7. [Phase 4 — GitHub Repository Setup](#7-phase-4--github-repository-setup)
 8. [Phase 5 — Create GitHub App](#8-phase-5--create-github-app)
 9. [Phase 6 — LangFuse Setup](#9-phase-6--langfuse-setup)
-10. [Phase 7 — OpenAI API Key](#10-phase-7--openai-api-key)
+10. [Phase 7 — Groq API Key](#10-phase-7--groq-api-key)
 11. [Phase 8 — Provision AWS Infrastructure with Terraform](#11-phase-8--provision-aws-infrastructure-with-terraform)
 12. [Phase 9 — Configure GitHub Secrets](#12-phase-9--configure-github-secrets)
 13. [Phase 10 — First Deployment via GitHub Actions](#13-phase-10--first-deployment-via-github-actions)
@@ -161,17 +161,17 @@ Create all these accounts before doing anything else.
 2. Sign up if you do not have an account
 3. Verify your email address
 
-### 4.3 OpenAI Account
+### 4.3 Groq Account
 
-1. Go to https://platform.openai.com
-2. Sign up with your email
-3. Go to Billing and add a payment method
-4. Add at least $10 of credits — this is needed to call GPT-4o-mini
-5. Go to Billing → Usage limits and set a monthly limit of $20 to avoid surprises
+1. Go to https://console.groq.com
+2. Sign up with your email or Google account
+3. Go to API Keys and click "Create API Key"
+4. Save the key — this is your `GROQ_API_KEY` (starts with `gsk_`)
+5. By default, Groq offers a generous free tier for developers, but you can add a payment method for higher rate limits.
 
 ### 4.4 LangFuse Account
 
-LangFuse records every single OpenAI API call your system makes. You can see what prompt was sent, what came back, how many tokens were used, and what it cost. It is free.
+LangFuse records every single Groq LLM API call your system makes. You can see what prompt was sent, what came back, how many tokens were used, and what it cost. It is free.
 
 1. Go to https://langfuse.com
 2. Click "Get Started Free"
@@ -522,15 +522,15 @@ LangFuse is already wired into the orchestrator service code. No code changes ne
 
 ---
 
-## 10. Phase 7 — OpenAI API Key
+## 10. Phase 7 — Groq API Key
 
-1. Go to https://platform.openai.com
-2. Click your profile icon in the top right → "API keys"
-3. Click "Create new secret key"
+1. Go to https://console.groq.com
+2. Click "API Keys" in the left sidebar
+3. Click "Create API Key"
 4. Name: `ai-code-reviewer`
-5. Click "Create secret key"
-6. Copy the key — it starts with `sk-proj-...` or `sk-...`
-7. Save it. This is your `OPENAI_API_KEY`.
+5. Click "Create"
+6. Copy the key — it starts with `gsk_`
+7. Save it. This is your `GROQ_API_KEY`.
 
 ---
 
@@ -652,8 +652,8 @@ For each secret: click "New repository secret", enter the Name and Value, click 
 
 After adding all secrets, you should have **3 secrets** total: `AWS_ACCOUNT_ID`, `AWS_ROLE_ARN`, `EKS_CLUSTER_NAME`.
 
-> **Note — `OPENAI_API_KEY` and `DATABASE_URL` do NOT go here:**
-> The evaluate job runs inside the Kubernetes cluster and reads these values directly from `infra/k8s/secret.yaml` at runtime. They do not need to be GitHub Actions secrets.
+> **Note — `GROQ_API_KEY` and `DATABASE_URL` do NOT go here:**
+> The evaluate job runs inside the Kubernetes cluster and reads these values directly from `infra/k8s/secret.yaml` (or via configured env variables) at runtime. They do not need to be GitHub Actions secrets.
 
 > **Important — what does NOT go here:**
 > - `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are NOT GitHub Actions secrets. No pipeline uses them. They go only into `infra/k8s/secret.yaml` in Phase 12 so Kubernetes pods can read them at runtime.
@@ -883,7 +883,7 @@ stringData:
     MIIEowIBAAKCAQEA1234...
     (all lines of your private key go here, keeping the line breaks)
     -----END RSA PRIVATE KEY-----
-  OPENAI_API_KEY: "sk-proj-abc123..."
+  GROQ_API_KEY: "gsk_abc123..."
   LANGFUSE_PUBLIC_KEY: "pk-lf-abc123..."
   LANGFUSE_SECRET_KEY: "sk-lf-abc123..."
   DATABASE_URL: "postgresql+asyncpg://dbadmin:YourStrongPassword123!@ai-code-reviewer-postgres.abc123.us-east-1.rds.amazonaws.com/codereviewer"
@@ -1479,7 +1479,7 @@ Log in and click on the `ai-code-reviewer` project.
 
 **Key sections:**
 - **Traces** — one entry per PR analyzed. Shows the full timeline of all 4 agent calls.
-- **Generations** — every individual OpenAI API call with full prompt and response
+- **Generations** — every individual Groq LLM API call with full prompt and response
 - **Dashboard** — total token usage, cost over time, average latency
 - **Users** — which repos triggered the most analyses
 
@@ -1660,9 +1660,8 @@ Check reviewer logs:
 kubectl logs -l app=reviewer -f
 ```
 
-Common causes:
-- OpenAI API key is invalid — check platform.openai.com/usage to see if calls are being made
-- OpenAI account has no credits — add credits at platform.openai.com/billing
+- Groq API key is invalid — check console.groq.com to verify your API key
+- Groq rate limits exceeded or billing issue — check your account limits on the Groq Console
 - GitHub App does not have Pull requests: Read and Write permission — check Step 8.3
 - Private key format is wrong in secrets — the key must preserve line breaks
 
@@ -1700,7 +1699,7 @@ aws eks update-kubeconfig --name ai-code-reviewer --region us-east-1
 
 | Resource | Cost |
 |---|---|
-| OpenAI GPT-4o-mini | ~$0.15 per 100 PRs reviewed |
+| Groq (llama-3.3-70b-versatile) | Generous Free Tier / ~$0.10 per 100 PRs reviewed |
 | LangFuse | Free up to 50,000 events/month |
 
 **To pause the system and stop all charges:**
